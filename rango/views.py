@@ -12,22 +12,24 @@ from django.contrib.auth import logout
 
 def index(request):
     category_list = Category.objects.order_by('-likes')[:5]
+    page_list = Page.objects.order_by('-views')[:5]
     
     context_dict = {}
     context_dict['boldmessage'] = 'Crunchy, creamy, cookie, candy, cupcake!'
     context_dict['categories'] = category_list
+    context_dict['pages'] = page_list
     
-    pages = Page.objects.order_by("-views")[:5]
-    context_dict['pages'] = pages
+    visitor_cookie_handler(request)
     
     #Render the response and send it back
     response =  render(request, 'rango/index.html', context=context_dict)
-    
-    visitor_cookie_handler(request, response)
     return response
 
 def about(request):
     context_dict = {'boldmessage':'This tutorial has been put together by Aidan Ling.'}
+    
+    visitor_cookie_handler(request)
+    context_dict['visits'] = request.session['visits']
     
     return render(request, 'rango/about.html', context=context_dict)
 
@@ -144,17 +146,21 @@ def user_logout(request):
     logout(request)
     return redirect(reverse('rango:index'))
 
-def visitor_cookie_handler(request, response):
-    visits = int(request.COOKIES.get('visits','1'))
+def get_server_side_cookie(request, cookie, default_val=None):
+    val = request.session.get(cookie)
+    if not val:
+        val = default_val
+    return val
+
+def visitor_cookie_handler(request):
+    visits = int(get_server_side_cookie(request, 'visits', '1'))
+    last_visit_cookie = get_server_side_cookie(request, 'last_visit', str(datetime.now()))
+    last_visit_time = datetime.strptime(last_visit_cookie[:-7], '%Y-%m-%d %H:%M:%S')
     
-    last_visit_cookie = request.COOKIES.get('last_visit', str(datetime.now()))
-    print(last_visit_cookie)
-    last_visit_time = datetime.strptime(last_visit_cookie[:19], '%Y-%m-%d %H:%M:%S')
-    
-    if  (datetime.now() - last_visit_time).days > 0:
-        vists = visits + 1
-        response.set_cookie('last_visit', str(datetime.now()))
+    if(datetime.now() - last_visit_time).days > 0:
+        visits = visits + 1
+        request.session['last_visit'] = str(datetime.now())
     else:
-        response.set_cookie('last_visit', last_visit_cookie)
-        
-    response.set_cookie('visits', visits)
+        request.session['last_visit'] = last_visit_cookie
+
+    request.session['visits'] = visits
